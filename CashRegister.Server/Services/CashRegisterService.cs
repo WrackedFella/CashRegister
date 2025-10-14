@@ -2,19 +2,12 @@ namespace CashRegister.Server.Services
 {
     public class CashRegisterService
     {
-        private static readonly Dictionary<string, decimal> Denominations = new()
-        {
-            { "dollar", 1.00m },
-            { "quarter", 0.25m },
-            { "dime", 0.10m },
-            { "nickel", 0.05m },
-            { "penny", 0.01m }
-        };
-
+        private readonly CashRegisterConfiguration _configuration;
         private readonly Random _random;
 
-        public CashRegisterService(Random? random = null)
+        public CashRegisterService(CashRegisterConfiguration configuration, Random? random = null)
         {
+            _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
             _random = random ?? new Random();
         }
 
@@ -61,7 +54,7 @@ namespace CashRegister.Server.Services
             var changeParts = new List<string>();
             var remainingAmount = Math.Round(changeAmount, 2);
 
-            foreach (var denomination in Denominations)
+            foreach (var denomination in _configuration.CurrencyDenominations)
             {
                 var count = (int)(remainingAmount / denomination.Value);
                 if (count > 0)
@@ -82,7 +75,7 @@ namespace CashRegister.Server.Services
 
             var remainingAmount = Math.Round(changeAmount, 2);
             var changeCombination = new Dictionary<string, int>();
-            var denominationsList = Denominations.ToList();
+            var denominationsList = _configuration.CurrencyDenominations.ToList();
 
             // Generate multiple random valid combinations and pick one
             var validCombinations = new List<Dictionary<string, int>>();
@@ -110,7 +103,7 @@ namespace CashRegister.Server.Services
 
             // Convert to result format
             var changeParts = new List<string>();
-            foreach (var denominationKey in Denominations.Keys)
+            foreach (var denominationKey in _configuration.CurrencyDenominations.Keys)
             {
                 if (chosenCombination.ContainsKey(denominationKey) && chosenCombination[denominationKey] > 0)
                 {
@@ -127,14 +120,14 @@ namespace CashRegister.Server.Services
         {
             var combination = new Dictionary<string, int>();
             var remaining = amount;
-            var denominationsList = Denominations.Keys.ToList();
+            var denominationsList = _configuration.CurrencyDenominations.Keys.ToList();
 
             // Randomly shuffle denomination order for each generation
             var shuffledDenominations = denominationsList.OrderBy(x => _random.Next()).ToList();
 
             foreach (var denominationKey in shuffledDenominations)
             {
-                var denominationValue = Denominations[denominationKey];
+                var denominationValue = _configuration.CurrencyDenominations[denominationKey];
                 
                 if (remaining >= denominationValue)
                 {
@@ -149,21 +142,25 @@ namespace CashRegister.Server.Services
                     }
                     else
                     {
-                        // For other denominations, randomly choose between 0 and max possible
-                        // Bias towards using some coins but not always the maximum
-                        var randomFactor = _random.NextDouble();
-                        if (randomFactor < 0.3) // 30% chance to skip this denomination entirely
-                        {
-                            useCount = 0;
-                        }
-                        else if (randomFactor < 0.7) // 40% chance to use partial amount
-                        {
-                            useCount = _random.Next(1, Math.Max(1, maxPossible / 2 + 1));
-                        }
-                        else // 30% chance to use more (but not necessarily all)
-                        {
-                            useCount = _random.Next(Math.Max(1, maxPossible / 2), maxPossible + 1);
-                        }
+                    // For other denominations, randomly choose between 0 and max possible
+                    // Bias towards using some coins but not always the maximum
+                    var randomFactor = _random.NextDouble();
+                    if (randomFactor < _configuration.RandomProbabilities.SkipDenominationProbability) // Configurable chance to skip this denomination entirely
+                    {
+                        useCount = 0;
+                    }
+                    else if (randomFactor < _configuration.RandomProbabilities.SkipDenominationProbability + _configuration.RandomProbabilities.UsePartialAmountProbability) // Configurable chance to use partial amount
+                    {
+                        var minCount = 1;
+                        var maxCount = Math.Max(1, maxPossible / 2 + 1);
+                        useCount = maxCount > minCount ? _random.Next(minCount, maxCount) : minCount;
+                    }
+                    else // Configurable chance to use more (but not necessarily all)
+                    {
+                        var minCount = Math.Max(1, maxPossible / 2);
+                        var maxCount = Math.Min(maxPossible + 1, _configuration.RandomProbabilities.MaxCoinsPerDenomination + 1);
+                        useCount = maxCount > minCount ? _random.Next(minCount, maxCount) : minCount;
+                    }
                     }
 
                     if (useCount > 0)
@@ -196,7 +193,7 @@ namespace CashRegister.Server.Services
             var combination = new Dictionary<string, int>();
             var remaining = amount;
 
-            foreach (var denomination in Denominations)
+            foreach (var denomination in _configuration.CurrencyDenominations)
             {
                 var count = (int)(remaining / denomination.Value);
                 if (count > 0)

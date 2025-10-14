@@ -4,11 +4,35 @@ namespace CashRegister.UnitTests
 {
     public class CashRegisterTests
     {
+        private CashRegisterConfiguration CreateDefaultConfiguration()
+        {
+            return new CashRegisterConfiguration
+            {
+                CurrencyDenominations = new Dictionary<string, decimal>
+                {
+                    { "dollar", 1.00m },
+                    { "quarter", 0.25m },
+                    { "dime", 0.10m },
+                    { "nickel", 0.05m },
+                    { "penny", 0.01m }
+                },
+                CurrencySymbol = "$",
+                RandomProbabilities = new RandomChangeProbabilities
+                {
+                    SkipDenominationProbability = 0.3,
+                    UsePartialAmountProbability = 0.4,
+                    UseFullAmountProbability = 0.3,
+                    MaxCoinsPerDenomination = 10
+                }
+            };
+        }
+
         [Fact]
         public void CalculateChangeForTransactions_WhenAmountOwedNotDivisibleByThree_ReturnsStandardChangeDescriptions()
         {
             // Arrange
-            var cashRegisterService = new CashRegisterService();
+            var config = CreateDefaultConfiguration();
+            var cashRegisterService = new CashRegisterService(config);
             var transactions = new[]
             {
                 "2.12,3.00",
@@ -34,9 +58,10 @@ namespace CashRegister.UnitTests
         public void CalculateChangeForTransactions_WhenAmountOwedDivisibleByThree_ReturnsRandomChangeDescriptions()
         {
             // Arrange
+            var config = CreateDefaultConfiguration();
             // Use a seeded random to make the test deterministic
             var seededRandom = new Random(42);
-            var cashRegisterService = new CashRegisterService(seededRandom);
+            var cashRegisterService = new CashRegisterService(config, seededRandom);
             var transactions = new[]
             {
                 "3.00,5.00", // 3.00 is divisible by 3, change = $2.00
@@ -54,16 +79,17 @@ namespace CashRegister.UnitTests
             Assert.NotEmpty(actualResults[1]);
             
             // Verify the total value is correct by parsing the change descriptions
-            Assert.True(VerifyChangeAmount(actualResults[0], 2.00m), $"First result should equal $2.00, got: {actualResults[0]}");
-            Assert.True(VerifyChangeAmount(actualResults[1], 4.00m), $"Second result should equal $4.00, got: {actualResults[1]}");
+            Assert.True(VerifyChangeAmount(actualResults[0], 2.00m, config), $"First result should equal $2.00, got: {actualResults[0]}");
+            Assert.True(VerifyChangeAmount(actualResults[1], 4.00m, config), $"Second result should equal $4.00, got: {actualResults[1]}");
         }
 
         [Fact]
         public void CalculateChangeForTransactions_WithMixedDivisibilityByThree_ReturnsBothStandardAndRandomResults()
         {
             // Arrange
+            var config = CreateDefaultConfiguration();
             var seededRandom = new Random(123);
-            var cashRegisterService = new CashRegisterService(seededRandom);
+            var cashRegisterService = new CashRegisterService(config, seededRandom);
             var transactions = new[]
             {
                 "2.12,3.00", // 2.12 is not divisible by 3 - should use standard change
@@ -82,14 +108,15 @@ namespace CashRegister.UnitTests
             Assert.Equal("3 pennies", actualResults[2]);
             
             // Second should be random but total value should be correct ($1.67)
-            Assert.True(VerifyChangeAmount(actualResults[1], 1.67m), $"Second result should equal $1.67, got: {actualResults[1]}");
+            Assert.True(VerifyChangeAmount(actualResults[1], 1.67m, config), $"Second result should equal $1.67, got: {actualResults[1]}");
         }
 
         [Fact]
         public void CalculateChangeForTransactions_SpecificExampleFromRequirement_ReturnsCorrectResults()
         {
             // Arrange
-            var cashRegisterService = new CashRegisterService();
+            var config = CreateDefaultConfiguration();
+            var cashRegisterService = new CashRegisterService(config);
             var transactions = new[]
             {
                 "2.12,3.00", // Not divisible by 3
@@ -108,20 +135,21 @@ namespace CashRegister.UnitTests
             Assert.Equal("3 pennies", actualResults[1]);
             
             // Third should be random but mathematically correct ($1.67)
-            Assert.True(VerifyChangeAmount(actualResults[2], 1.67m), $"Third result should equal $1.67, got: {actualResults[2]}");
+            Assert.True(VerifyChangeAmount(actualResults[2], 1.67m, config), $"Third result should equal $1.67, got: {actualResults[2]}");
         }
 
         [Fact]
         public void CalculateRandomChange_MultipleRuns_CanProduceDifferentResults()
         {
             // Arrange
+            var config = CreateDefaultConfiguration();
             var transactions = new[] { "3.33,5.00" }; // Divisible by 3, change = $1.67
             var results = new HashSet<string>();
 
             // Act - run multiple times to see if we get different results
             for (int i = 0; i < 10; i++)
             {
-                var cashRegisterService = new CashRegisterService();
+                var cashRegisterService = new CashRegisterService(config);
                 var result = cashRegisterService.CalculateChangeForTransactions(transactions);
                 if (result.Length > 0)
                 {
@@ -135,7 +163,7 @@ namespace CashRegister.UnitTests
             
             foreach (var result in results)
             {
-                Assert.True(VerifyChangeAmount(result, 1.67m), $"Result should equal $1.67, got: {result}");
+                Assert.True(VerifyChangeAmount(result, 1.67m, config), $"Result should equal $1.67, got: {result}");
             }
             
             // It's possible (but unlikely) that all runs produce the same result due to randomness
@@ -143,7 +171,7 @@ namespace CashRegister.UnitTests
             Assert.True(true, $"Generated {results.Count} unique result(s): {string.Join("; ", results)}");
         }
 
-        private bool VerifyChangeAmount(string changeDescription, decimal expectedAmount)
+        private bool VerifyChangeAmount(string changeDescription, decimal expectedAmount, CashRegisterConfiguration config)
         {
             if (string.IsNullOrEmpty(changeDescription))
                 return expectedAmount == 0;
@@ -160,21 +188,31 @@ namespace CashRegister.UnitTests
                 {
                     var denomination = trimmedPart.Substring(spaceIndex + 1).Trim();
                     
-                    decimal value = denomination switch
-                    {
-                        "dollar" or "dollars" => 1.00m,
-                        "quarter" or "quarters" => 0.25m,
-                        "dime" or "dimes" => 0.10m,
-                        "nickel" or "nickels" => 0.05m,
-                        "penny" or "pennies" => 0.01m,
-                        _ => 0m
-                    };
+                    // Find the denomination value from config
+                    var denominationEntry = config.CurrencyDenominations.FirstOrDefault(d => 
+                        d.Key == denomination || 
+                        GetPluralDenomination(d.Key, count) == denomination);
                     
-                    totalValue += count * value;
+                    if (!denominationEntry.Equals(default(KeyValuePair<string, decimal>)))
+                    {
+                        totalValue += count * denominationEntry.Value;
+                    }
                 }
             }
 
             return Math.Abs(totalValue - expectedAmount) < 0.001m;
+        }
+
+        private string GetPluralDenomination(string denominationKey, int count)
+        {
+            if (count == 1)
+                return denominationKey;
+
+            return denominationKey switch
+            {
+                "penny" => "pennies",
+                _ => denominationKey + "s"
+            };
         }
     }
 }
