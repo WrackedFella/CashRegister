@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, dev ]
+  workflow_dispatch:
+
+jobs:
+  build-dotnet:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: 9.0.x
+    - name: Restore dependencies
+      run: dotnet restore CashRegister.sln
+    - name: Build
+      run: dotnet build CashRegister.sln --no-restore
+    - name: Test
+      run: dotnet test CashRegister.sln --no-build --verbosity normal
+
+  build-client:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Setup Node
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+        cache-dependency-path: cashregister.client/package-lock.json
+    - name: Install dependencies
+      run: npm ci
+      working-directory: cashregister.client
+    - name: Lint
+      run: npm run lint
+      working-directory: cashregister.client
+    - name: Build
+      run: npm run build
+      working-directory: cashregister.client

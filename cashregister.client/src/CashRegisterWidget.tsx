@@ -64,7 +64,7 @@ function CashRegisterWidget() {
         setError(errorData.error || 'An error occurred while processing the file')
         setIsUpdating(false)
       }
-    } catch (err) {
+    } catch {
       setError('Network error. Please try again.')
       setIsUpdating(false)
     } finally {
