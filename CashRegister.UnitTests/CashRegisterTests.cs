@@ -4,34 +4,30 @@ namespace CashRegister.UnitTests
 {
     public class CashRegisterTests
     {
-        private CashRegisterConfiguration CreateDefaultConfiguration()
+        private static readonly CashRegisterConfiguration config = new()
         {
-            return new CashRegisterConfiguration
+            CurrencyDenominations = new Dictionary<string, decimal>
             {
-                CurrencyDenominations = new Dictionary<string, decimal>
-                {
-                    { "dollar", 1.00m },
-                    { "quarter", 0.25m },
-                    { "dime", 0.10m },
-                    { "nickel", 0.05m },
-                    { "penny", 0.01m }
-                },
-                CurrencySymbol = "$",
-                RandomProbabilities = new RandomChangeProbabilities
-                {
-                    SkipDenominationProbability = 0.3,
-                    UsePartialAmountProbability = 0.4,
-                    UseFullAmountProbability = 0.3,
-                    MaxCoinsPerDenomination = 10
-                }
-            };
-        }
+                { "dollar", 1.00m },
+                { "quarter", 0.25m },
+                { "dime", 0.10m },
+                { "nickel", 0.05m },
+                { "penny", 0.01m }
+            },
+            CurrencySymbol = "$",
+            RandomProbabilities = new RandomChangeProbabilities
+            {
+                SkipDenominationProbability = 0.3,
+                UsePartialAmountProbability = 0.4,
+                UseFullAmountProbability = 0.3,
+                MaxCoinsPerDenomination = 10
+            }
+        };
 
         [Fact]
         public void CalculateChangeForTransactions_WhenAmountOwedNotDivisibleByThree_ReturnsStandardChangeDescriptions()
         {
             // Arrange
-            var config = CreateDefaultConfiguration();
             var cashRegisterService = new CashRegisterService(config);
             var transactions = new[]
             {
@@ -58,7 +54,6 @@ namespace CashRegister.UnitTests
         public void CalculateChangeForTransactions_WhenAmountOwedDivisibleByThree_ReturnsRandomChangeDescriptions()
         {
             // Arrange
-            var config = CreateDefaultConfiguration();
             // Use a seeded random to make the test deterministic
             var seededRandom = new Random(42);
             var cashRegisterService = new CashRegisterService(config, seededRandom);
@@ -87,7 +82,6 @@ namespace CashRegister.UnitTests
         public void CalculateChangeForTransactions_WithMixedDivisibilityByThree_ReturnsBothStandardAndRandomResults()
         {
             // Arrange
-            var config = CreateDefaultConfiguration();
             var seededRandom = new Random(123);
             var cashRegisterService = new CashRegisterService(config, seededRandom);
             var transactions = new[]
@@ -115,7 +109,6 @@ namespace CashRegister.UnitTests
         public void CalculateChangeForTransactions_SpecificExampleFromRequirement_ReturnsCorrectResults()
         {
             // Arrange
-            var config = CreateDefaultConfiguration();
             var cashRegisterService = new CashRegisterService(config);
             var transactions = new[]
             {
@@ -142,7 +135,6 @@ namespace CashRegister.UnitTests
         public void CalculateRandomChange_MultipleRuns_CanProduceDifferentResults()
         {
             // Arrange
-            var config = CreateDefaultConfiguration();
             var transactions = new[] { "3.33,5.00" }; // Divisible by 3, change = $1.67
             var results = new HashSet<string>();
 
@@ -171,6 +163,43 @@ namespace CashRegister.UnitTests
             Assert.True(true, $"Generated {results.Count} unique result(s): {string.Join("; ", results)}");
         }
 
+        [Fact]
+        public void CalculateChangeForTransactions_WithInvalidTransaction_LogsWarning()
+        {
+            // Arrange
+            var cashRegisterService = new CashRegisterService(config);
+            var transactions = new[]
+            {
+                "2.12,3.00", // Valid transaction
+                "invalid,format", // Invalid transaction
+                "3.33,5.00"  // Valid transaction
+            };
+
+            // Act
+            var actualResults = cashRegisterService.CalculateChangeForTransactions(transactions);
+
+            // Assert
+            Assert.Equal(2, actualResults.Length); // Only valid transactions should produce results
+            Assert.Equal("3 quarters,1 dime,3 pennies", actualResults[0]);
+            Assert.True(VerifyChangeAmount(actualResults[1], 1.67m, config), $"Third result should equal $1.67, got: {actualResults[1]}");
+        }
+
+        [Fact]
+        public void CalculateChangeForTransactions_WithInsufficientPayment_LogsWarning()
+        {
+            // Arrange
+            var cashRegisterService = new CashRegisterService(config);
+            var transactions = new[]
+            {
+                "5.00,3.00" // Amount paid is less than amount owed
+            };
+
+            // Act
+            var actualResults = cashRegisterService.CalculateChangeForTransactions(transactions);
+
+            // Assert
+            Assert.Empty(actualResults); // No change should be calculated
+        }
         private bool VerifyChangeAmount(string changeDescription, decimal expectedAmount, CashRegisterConfiguration config)
         {
             if (string.IsNullOrEmpty(changeDescription))

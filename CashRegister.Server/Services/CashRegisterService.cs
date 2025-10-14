@@ -1,48 +1,83 @@
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+
 namespace CashRegister.Server.Services
 {
     public class CashRegisterService
     {
         private readonly CashRegisterConfiguration _configuration;
         private readonly Random _random;
+        private readonly ILogger<CashRegisterService> _logger;
 
-        public CashRegisterService(CashRegisterConfiguration configuration, Random? random = null)
+        public CashRegisterService(CashRegisterConfiguration configuration, Random? random = null, ILogger<CashRegisterService>? logger = null)
         {
             _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
             _random = random ?? new Random();
+            _logger = logger ?? NullLogger<CashRegisterService>.Instance;
         }
 
         public string[] CalculateChangeForTransactions(string[] transactions)
         {
+            _logger.LogInformation("Processing {TransactionCount} transactions", transactions.Length);
+            
             var results = new List<string>();
             
             foreach (var transaction in transactions)
             {
-                var parts = transaction.Split(',');
-                if (parts.Length == 2 && 
-                    decimal.TryParse(parts[0], out decimal amountOwed) && 
-                    decimal.TryParse(parts[1], out decimal amountPaid))
+                try
                 {
-                    var changeAmount = amountPaid - amountOwed;
+                    _logger.LogDebug("Processing transaction: {Transaction}", transaction);
                     
-                    string changeDescription;
-                    if (amountOwed % 3 == 0)
+                    var parts = transaction.Split(',');
+                    if (parts.Length == 2 && 
+                        decimal.TryParse(parts[0], out decimal amountOwed) && 
+                        decimal.TryParse(parts[1], out decimal amountPaid))
                     {
-                        // Random denomination selection for amounts divisible by 3
-                        changeDescription = CalculateRandomChange(changeAmount);
+                        var changeAmount = amountPaid - amountOwed;
+                        
+                        if (changeAmount < 0)
+                        {
+                            _logger.LogWarning("Invalid transaction: amount paid ({AmountPaid}) is less than amount owed ({AmountOwed})", amountPaid, amountOwed);
+                            continue;
+                        }
+                        
+                        string changeDescription;
+                        if (amountOwed % 3 == 0)
+                        {
+                            _logger.LogDebug("Using random change calculation for amount owed {AmountOwed} (divisible by 3)", amountOwed);
+                            // Random denomination selection for amounts divisible by 3
+                            changeDescription = CalculateRandomChange(changeAmount);
+                        }
+                        else
+                        {
+                            _logger.LogDebug("Using standard change calculation for amount owed {AmountOwed}", amountOwed);
+                            // Standard highest-to-lowest denomination for amounts not divisible by 3
+                            changeDescription = CalculateStandardChange(changeAmount);
+                        }
+                        
+                        if (!string.IsNullOrEmpty(changeDescription))
+                        {
+                            _logger.LogDebug("Calculated change: {ChangeDescription}", changeDescription);
+                            results.Add(changeDescription);
+                        }
+                        else
+                        {
+                            _logger.LogWarning("No change calculated for transaction: {Transaction}", transaction);
+                        }
                     }
                     else
                     {
-                        // Standard highest-to-lowest denomination for amounts not divisible by 3
-                        changeDescription = CalculateStandardChange(changeAmount);
+                        _logger.LogWarning("Invalid transaction format: {Transaction}. Expected format: 'amountOwed,amountPaid'", transaction);
                     }
-                    
-                    if (!string.IsNullOrEmpty(changeDescription))
-                    {
-                        results.Add(changeDescription);
-                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Error processing transaction: {Transaction}", transaction);
+                    throw;
                 }
             }
             
+            _logger.LogInformation("Successfully processed {ProcessedCount} out of {TotalCount} transactions", results.Count, transactions.Length);
             return results.ToArray();
         }
 

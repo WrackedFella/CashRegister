@@ -8,23 +8,32 @@ namespace CashRegister.Server.Controllers
     public class CashRegisterController : ControllerBase
     {
         private readonly CashRegisterService _cashRegisterService;
+        private readonly ILogger<CashRegisterController> _logger;
 
-        public CashRegisterController(CashRegisterService cashRegisterService)
+        public CashRegisterController(CashRegisterService cashRegisterService, ILogger<CashRegisterController> logger)
         {
             _cashRegisterService = cashRegisterService;
+            _logger = logger;
         }
 
         [HttpPost("calculate-change")]
         public IActionResult CalculateChange([FromBody] string[] transactions)
         {
+            _logger.LogInformation("Received calculate-change request with {TransactionCount} transactions from {RemoteIpAddress}", 
+                transactions?.Length ?? 0, HttpContext.Connection.RemoteIpAddress);
+
             try
             {
-                var results = _cashRegisterService.CalculateChangeForTransactions(transactions);
+                var results = _cashRegisterService.CalculateChangeForTransactions(transactions ?? Array.Empty<string>());
+                
+                _logger.LogInformation("Successfully calculated change for {ResultCount} transactions", results.Length);
+                
                 return Ok(new { results });
             }
             catch (Exception ex)
             {
-                return BadRequest(new { error = ex.Message });
+                _logger.LogError(ex, "Error calculating change for transactions");
+                throw; // Let the exception middleware handle this
             }
         }
     }
