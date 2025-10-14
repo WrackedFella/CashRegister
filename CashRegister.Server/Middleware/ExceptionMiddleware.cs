@@ -29,21 +29,11 @@ namespace CashRegister.Server.Middleware
 
         private async Task HandleExceptionAsync(HttpContext context, Exception exception)
         {
-            // Log the exception with structured logging
             _logger.LogError(exception, "An unhandled exception occurred while processing request {RequestPath} with method {RequestMethod}",
                 context.Request.Path, context.Request.Method);
 
-            // Determine the appropriate status code
-            var statusCode = exception switch
-            {
-                ArgumentException => (int)HttpStatusCode.BadRequest,
-                InvalidOperationException => (int)HttpStatusCode.BadRequest,
-                KeyNotFoundException => (int)HttpStatusCode.NotFound,
-                UnauthorizedAccessException => (int)HttpStatusCode.Unauthorized,
-                _ => (int)HttpStatusCode.InternalServerError
-            };
-
-            // Set the response
+            var statusCode = GetStatusCode(exception);
+            
             context.Response.ContentType = "application/json";
             context.Response.StatusCode = statusCode;
 
@@ -58,12 +48,16 @@ namespace CashRegister.Server.Middleware
                 }
             };
 
-            var jsonResponse = JsonSerializer.Serialize(errorResponse, new JsonSerializerOptions
-            {
-                WriteIndented = true
-            });
-
-            await context.Response.WriteAsync(jsonResponse);
+            await context.Response.WriteAsync(JsonSerializer.Serialize(errorResponse, new JsonSerializerOptions { WriteIndented = true }));
         }
+
+        private static int GetStatusCode(Exception exception) => exception switch
+        {
+            ArgumentException => (int)HttpStatusCode.BadRequest,
+            InvalidOperationException => (int)HttpStatusCode.BadRequest,
+            KeyNotFoundException => (int)HttpStatusCode.NotFound,
+            UnauthorizedAccessException => (int)HttpStatusCode.Unauthorized,
+            _ => (int)HttpStatusCode.InternalServerError
+        };
     }
 }

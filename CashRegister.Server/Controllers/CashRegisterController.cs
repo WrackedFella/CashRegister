@@ -17,24 +17,16 @@ namespace CashRegister.Server.Controllers
         }
 
         [HttpPost("calculate-change")]
-        public IActionResult CalculateChange([FromBody] string[] transactions)
+        public IActionResult CalculateChange([FromBody] string[]? transactions)
         {
+            var transactionArray = transactions ?? Array.Empty<string>();
             _logger.LogInformation("Received calculate-change request with {TransactionCount} transactions from {RemoteIpAddress}", 
-                transactions?.Length ?? 0, HttpContext.Connection.RemoteIpAddress);
+                transactionArray.Length, HttpContext.Connection.RemoteIpAddress);
 
-            try
-            {
-                var results = _cashRegisterService.CalculateChangeForTransactions(transactions ?? Array.Empty<string>());
-                
-                _logger.LogInformation("Successfully calculated change for {ResultCount} transactions", results.Length);
-                
-                return Ok(new { results });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error calculating change for transactions");
-                throw; // Let the exception middleware handle this
-            }
+            var results = _cashRegisterService.CalculateChangeForTransactions(transactionArray);
+            _logger.LogInformation("Successfully calculated change for {ResultCount} transactions", results.Length);
+            
+            return Ok(new { results });
         }
     }
 }

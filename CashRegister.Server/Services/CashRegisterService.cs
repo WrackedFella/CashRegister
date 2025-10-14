@@ -26,48 +26,10 @@ namespace CashRegister.Server.Services
             {
                 try
                 {
-                    _logger.LogDebug("Processing transaction: {Transaction}", transaction);
-                    
-                    var parts = transaction.Split(',');
-                    if (parts.Length == 2 && 
-                        decimal.TryParse(parts[0], out decimal amountOwed) && 
-                        decimal.TryParse(parts[1], out decimal amountPaid))
+                    var changeDescription = ProcessTransaction(transaction);
+                    if (!string.IsNullOrEmpty(changeDescription))
                     {
-                        var changeAmount = amountPaid - amountOwed;
-                        
-                        if (changeAmount < 0)
-                        {
-                            _logger.LogWarning("Invalid transaction: amount paid ({AmountPaid}) is less than amount owed ({AmountOwed})", amountPaid, amountOwed);
-                            continue;
-                        }
-                        
-                        string changeDescription;
-                        if (amountOwed % 3 == 0)
-                        {
-                            _logger.LogDebug("Using random change calculation for amount owed {AmountOwed} (divisible by 3)", amountOwed);
-                            // Random denomination selection for amounts divisible by 3
-                            changeDescription = CalculateRandomChange(changeAmount);
-                        }
-                        else
-                        {
-                            _logger.LogDebug("Using standard change calculation for amount owed {AmountOwed}", amountOwed);
-                            // Standard highest-to-lowest denomination for amounts not divisible by 3
-                            changeDescription = CalculateStandardChange(changeAmount);
-                        }
-                        
-                        if (!string.IsNullOrEmpty(changeDescription))
-                        {
-                            _logger.LogDebug("Calculated change: {ChangeDescription}", changeDescription);
-                            results.Add(changeDescription);
-                        }
-                        else
-                        {
-                            _logger.LogWarning("No change calculated for transaction: {Transaction}", transaction);
-                        }
-                    }
-                    else
-                    {
-                        _logger.LogWarning("Invalid transaction format: {Transaction}. Expected format: 'amountOwed,amountPaid'", transaction);
+                        results.Add(changeDescription);
                     }
                 }
                 catch (Exception ex)
@@ -81,73 +43,80 @@ namespace CashRegister.Server.Services
             return results.ToArray();
         }
 
-        private string CalculateStandardChange(decimal changeAmount)
+        private string ProcessTransaction(string transaction)
         {
-            if (changeAmount <= 0)
-                return "";
-
-            var changeParts = new List<string>();
-            var remainingAmount = Math.Round(changeAmount, 2);
-
-            foreach (var denomination in _configuration.CurrencyDenominations)
+            _logger.LogDebug("Processing transaction: {Transaction}", transaction);
+            
+            var parts = transaction.Split(',');
+            if (parts.Length != 2 || 
+                !decimal.TryParse(parts[0], out decimal amountOwed) || 
+                !decimal.TryParse(parts[1], out decimal amountPaid))
             {
-                var count = (int)(remainingAmount / denomination.Value);
-                if (count > 0)
-                {
-                    var denominationName = GetPluralDenomination(denomination.Key, count);
-                    changeParts.Add($"{count} {denominationName}");
-                    remainingAmount = Math.Round(remainingAmount - (count * denomination.Value), 2);
-                }
+                _logger.LogWarning("Invalid transaction format: {Transaction}. Expected format: 'amountOwed,amountPaid'", transaction);
+                return string.Empty;
             }
 
-            return string.Join(",", changeParts);
+            var changeAmount = amountPaid - amountOwed;
+            
+            if (changeAmount < 0)
+            {
+                _logger.LogWarning("Invalid transaction: amount paid ({AmountPaid}) is less than amount owed ({AmountOwed})", amountPaid, amountOwed);
+                return string.Empty;
+            }
+
+            var changeDescription = amountOwed % 3 == 0 
+                ? CalculateRandomChange(changeAmount) 
+                : CalculateStandardChange(changeAmount);
+
+            _logger.LogDebug("Calculated change: {ChangeDescription}", changeDescription);
+            return changeDescription;
+        }
+
+        private string CalculateStandardChange(decimal changeAmount)
+        {
+            if (changeAmount <= 0) return string.Empty;
+
+            var combination = GenerateStandardCombination(changeAmount);
+            return FormatChangeCombination(combination);
         }
 
         private string CalculateRandomChange(decimal changeAmount)
         {
-            if (changeAmount <= 0)
-                return "";
+            if (changeAmount <= 0) return string.Empty;
 
-            var remainingAmount = Math.Round(changeAmount, 2);
-            var changeCombination = new Dictionary<string, int>();
-            var denominationsList = _configuration.CurrencyDenominations.ToList();
+            var validCombinations = GenerateRandomCombinations(changeAmount);
+            var chosenCombination = validCombinations[_random.Next(validCombinations.Count)];
+            
+            return FormatChangeCombination(chosenCombination);
+        }
 
-            // Generate multiple random valid combinations and pick one
+        private List<Dictionary<string, int>> GenerateRandomCombinations(decimal amount)
+        {
             var validCombinations = new List<Dictionary<string, int>>();
             
-            // Try to generate several different valid combinations
-            for (int attempt = 0; attempt < 20; attempt++)
+            for (int attempt = 0; attempt < 20 && validCombinations.Count < 5; attempt++)
             {
-                var combination = GenerateRandomValidCombination(remainingAmount);
+                var combination = GenerateRandomValidCombination(amount);
                 if (combination != null && !CombinationExists(validCombinations, combination))
                 {
                     validCombinations.Add(combination);
                 }
-                
-                if (validCombinations.Count >= 5) break; // Stop when we have enough options
             }
 
-            // If we couldn't generate alternatives, create some manually different combinations
             if (validCombinations.Count == 0)
             {
-                validCombinations.Add(GenerateStandardCombination(remainingAmount));
+                validCombinations.Add(GenerateStandardCombination(amount));
             }
 
-            // Pick a random combination from our valid options
-            var chosenCombination = validCombinations[_random.Next(validCombinations.Count)];
+            return validCombinations;
+        }
 
-            // Convert to result format
-            var changeParts = new List<string>();
-            foreach (var denominationKey in _configuration.CurrencyDenominations.Keys)
-            {
-                if (chosenCombination.ContainsKey(denominationKey) && chosenCombination[denominationKey] > 0)
-                {
-                    var count = chosenCombination[denominationKey];
-                    var denominationName = GetPluralDenomination(denominationKey, count);
-                    changeParts.Add($"{count} {denominationName}");
-                }
-            }
-
+        private string FormatChangeCombination(Dictionary<string, int> combination)
+        {
+            var changeParts = _configuration.CurrencyDenominations.Keys
+                .Where(key => combination.ContainsKey(key) && combination[key] > 0)
+                .Select(key => $"{combination[key]} {GetPluralDenomination(key, combination[key])}");
+            
             return string.Join(",", changeParts);
         }
 
@@ -155,10 +124,9 @@ namespace CashRegister.Server.Services
         {
             var combination = new Dictionary<string, int>();
             var remaining = amount;
-            var denominationsList = _configuration.CurrencyDenominations.Keys.ToList();
-
-            // Randomly shuffle denomination order for each generation
-            var shuffledDenominations = denominationsList.OrderBy(x => _random.Next()).ToList();
+            var shuffledDenominations = _configuration.CurrencyDenominations.Keys
+                .OrderBy(x => _random.Next())
+                .ToList();
 
             foreach (var denominationKey in shuffledDenominations)
             {
@@ -166,37 +134,7 @@ namespace CashRegister.Server.Services
                 
                 if (remaining >= denominationValue)
                 {
-                    var maxPossible = (int)(remaining / denominationValue);
-                    
-                    // Introduce more randomness - sometimes use fewer coins, sometimes more
-                    int useCount;
-                    if (denominationKey == "penny")
-                    {
-                        // For pennies, use all remaining to ensure exact change
-                        useCount = (int)Math.Round(remaining / denominationValue);
-                    }
-                    else
-                    {
-                    // For other denominations, randomly choose between 0 and max possible
-                    // Bias towards using some coins but not always the maximum
-                    var randomFactor = _random.NextDouble();
-                    if (randomFactor < _configuration.RandomProbabilities.SkipDenominationProbability) // Configurable chance to skip this denomination entirely
-                    {
-                        useCount = 0;
-                    }
-                    else if (randomFactor < _configuration.RandomProbabilities.SkipDenominationProbability + _configuration.RandomProbabilities.UsePartialAmountProbability) // Configurable chance to use partial amount
-                    {
-                        var minCount = 1;
-                        var maxCount = Math.Max(1, maxPossible / 2 + 1);
-                        useCount = maxCount > minCount ? _random.Next(minCount, maxCount) : minCount;
-                    }
-                    else // Configurable chance to use more (but not necessarily all)
-                    {
-                        var minCount = Math.Max(1, maxPossible / 2);
-                        var maxCount = Math.Min(maxPossible + 1, _configuration.RandomProbabilities.MaxCoinsPerDenomination + 1);
-                        useCount = maxCount > minCount ? _random.Next(minCount, maxCount) : minCount;
-                    }
-                    }
+                    var useCount = CalculateRandomCoinCount(denominationKey, remaining, denominationValue);
 
                     if (useCount > 0)
                     {
@@ -206,21 +144,45 @@ namespace CashRegister.Server.Services
                 }
             }
 
-            // If we have remaining amount, convert to pennies
+            AddRemainingPennies(combination, remaining);
+            return combination;
+        }
+
+        private int CalculateRandomCoinCount(string denominationKey, decimal remaining, decimal denominationValue)
+        {
+            var maxPossible = (int)(remaining / denominationValue);
+            
+            if (denominationKey == "penny")
+            {
+                return (int)Math.Round(remaining / denominationValue);
+            }
+
+            var randomFactor = _random.NextDouble();
+            var probabilities = _configuration.RandomProbabilities;
+
+            if (randomFactor < probabilities.SkipDenominationProbability)
+            {
+                return 0;
+            }
+            
+            if (randomFactor < probabilities.SkipDenominationProbability + probabilities.UsePartialAmountProbability)
+            {
+                var maxCount = Math.Max(1, maxPossible / 2 + 1);
+                return maxCount > 1 ? _random.Next(1, maxCount) : 1;
+            }
+            
+            var minCount = Math.Max(1, maxPossible / 2);
+            var upperLimit = Math.Min(maxPossible + 1, probabilities.MaxCoinsPerDenomination + 1);
+            return upperLimit > minCount ? _random.Next(minCount, upperLimit) : minCount;
+        }
+
+        private static void AddRemainingPennies(Dictionary<string, int> combination, decimal remaining)
+        {
             if (remaining > 0.001m)
             {
                 var remainingPennies = (int)Math.Round(remaining / 0.01m);
-                if (combination.ContainsKey("penny"))
-                {
-                    combination["penny"] += remainingPennies;
-                }
-                else
-                {
-                    combination["penny"] = remainingPennies;
-                }
+                combination["penny"] = combination.GetValueOrDefault("penny") + remainingPennies;
             }
-
-            return combination;
         }
 
         private Dictionary<string, int> GenerateStandardCombination(decimal amount)
@@ -241,23 +203,16 @@ namespace CashRegister.Server.Services
             return combination;
         }
 
-        private bool CombinationExists(List<Dictionary<string, int>> combinations, Dictionary<string, int> newCombination)
-        {
-            return combinations.Any(existing => 
+        private static bool CombinationExists(List<Dictionary<string, int>> combinations, Dictionary<string, int> newCombination) =>
+            combinations.Any(existing => 
                 existing.Count == newCombination.Count &&
-                existing.All(kvp => newCombination.ContainsKey(kvp.Key) && newCombination[kvp.Key] == kvp.Value));
-        }
+                existing.All(kvp => newCombination.TryGetValue(kvp.Key, out var value) && value == kvp.Value));
 
-        private string GetPluralDenomination(string denominationKey, int count)
-        {
-            if (count == 1)
-                return denominationKey;
-
-            return denominationKey switch
+        private static string GetPluralDenomination(string denominationKey, int count) =>
+            count == 1 ? denominationKey : denominationKey switch
             {
                 "penny" => "pennies",
                 _ => denominationKey + "s"
             };
-        }
     }
 }
