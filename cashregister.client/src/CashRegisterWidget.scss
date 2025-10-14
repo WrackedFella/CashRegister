@@ -9,4 +9,54 @@ $secondary: #828282;
     background-color: $green-400;
     border-color: $green;
     max-width: 30rem;
+
+    // Fade-in animation for alerts
+    .fade-in {
+        animation: fadeIn 0.3s ease-in;
+    }
+
+    // Slide-in animation for results on first submit
+    .results-container {
+        &.slide-in {
+            animation: slideIn 0.4s ease-out;
+        }
+
+        // Smooth content update animation
+        &.updating {
+            .results-textarea {
+                opacity: 0.5;
+                transition: opacity 0.2s ease-in-out;
+            }
+        }
+
+        // Ensure textarea maintains user-resized dimensions
+        .results-textarea {
+            resize: vertical;
+            min-height: 200px;
+            transition: opacity 0.2s ease-in-out;
+        }
+    }
+
+    // Keyframe animations
+    @keyframes fadeIn {
+        from {
+            opacity: 0;
+        }
+        to {
+            opacity: 1;
+        }
+    }
+
+    @keyframes slideIn {
+        from {
+            opacity: 0;
+            transform: translateY(-10px);
+            max-height: 0;
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+            max-height: 500px;
+        }
+    }
 }
