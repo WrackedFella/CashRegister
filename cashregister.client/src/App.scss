@@ -1,0 +1,7 @@
+@import 'bootstrap/scss/bootstrap';
+
+#MainContent {
+    @extend .d-flex, .justify-content-center, .align-items-center, .min-vh-100;
+
+    background-color: $green-200;
+}

@@ -1,0 +1,12 @@
+@import 'bootstrap/scss/bootstrap';
+
+$primary: #A2E4B8;
+$secondary: #828282;
+
+#CashRegisterWidget {
+    @extend .p-4, .border, .rounded;
+
+    background-color: $green-400;
+    border-color: $green;
+    max-width: 30rem;
+}
