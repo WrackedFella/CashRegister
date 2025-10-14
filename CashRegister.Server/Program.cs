@@ -38,9 +38,6 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
-app.UseDefaultFiles();
-app.MapStaticAssets();
-
 // Add custom exception middleware
 app.UseMiddleware<ExceptionMiddleware>();
 
@@ -49,7 +46,5 @@ app.UseHttpsRedirection();
 app.UseAuthorization();
 
 app.MapControllers();
-
-app.MapFallbackToFile("/index.html");
 
 app.Run();
