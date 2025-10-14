@@ -50,12 +50,12 @@ function CashRegisterWidget() {
         if (hasSubmittedOnce && showResults) {
           // Brief delay for fade effect
           setTimeout(() => {
-            setResults(data.results)
+            setResults(data.results.replace(/,(\d)/g, ', $1'))
             setIsUpdating(false)
           }, 200)
         } else {
           // First time - show with slide-in animation
-          setResults(data.results)
+          setResults(data.results.replace(/,(\d)/g, ', $1'))
           setShowResults(true)
           setHasSubmittedOnce(true)
         }

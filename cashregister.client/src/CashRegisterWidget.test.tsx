@@ -57,7 +57,7 @@ describe('CashRegisterWidget', () => {
     fireEvent.click(submitButton)
 
     await waitFor(() => {
-      expect(screen.getByDisplayValue('3 quarters,1 dime,3 pennies')).toBeInTheDocument()
+      expect(screen.getByDisplayValue('3 quarters, 1 dime, 3 pennies')).toBeInTheDocument()
     })
     expect(mockFetch).toHaveBeenCalledWith('/cashregister/calculate-change', expect.any(Object))
   })
