@@ -7,22 +7,13 @@ WORKDIR /app
 EXPOSE 8080
 EXPOSE 8081
 
-
 # This stage is used to build the service project
-FROM mcr.microsoft.com/dotnet/sdk:9.0 AS with-node
-RUN apt-get update
-RUN apt-get install curl
-RUN curl -sL https://deb.nodesource.com/setup_20.x | bash
-RUN apt-get -y install nodejs
-
-
-FROM with-node AS build
+FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
 ARG BUILD_CONFIGURATION=Release
 WORKDIR /src
 COPY ["CashRegister.Server/CashRegister.Server.csproj", "CashRegister.Server/"]
-COPY ["cashregister.client/cashregister.client.esproj", "cashregister.client/"]
 RUN dotnet restore "./CashRegister.Server/CashRegister.Server.csproj"
-COPY . .
+COPY CashRegister.Server/ ./CashRegister.Server/
 WORKDIR "/src/CashRegister.Server"
 RUN dotnet build "./CashRegister.Server.csproj" -c $BUILD_CONFIGURATION -o /app/build
 

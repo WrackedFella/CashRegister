@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  server:
+    build:
+      context: .
+      dockerfile: CashRegister.Server/Dockerfile
+    container_name: cashregister-server
+    ports:
+      - "5000:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_HTTP_PORTS=8080
+      - CashRegister__Currency=USD
+    networks:
+      - cashregister-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/weatherforecast"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  client:
+    build:
+      context: ./cashregister.client
+      dockerfile: Dockerfile
+      args:
+        - VITE_API_URL=http://localhost:5000
+    container_name: cashregister-client
+    ports:
+      - "3000:80"
+    depends_on:
+      - server
+    networks:
+      - cashregister-network
+
+networks:
+  cashregister-network:
+    driver: bridge
