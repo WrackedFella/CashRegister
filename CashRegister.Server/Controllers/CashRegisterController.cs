@@ -94,5 +94,11 @@ namespace CashRegister.Server.Controllers
                 return StatusCode(500, new { error = "An error occurred while processing the file" });
             }
         }
+
+        [HttpGet("health")]
+        public IActionResult Health()
+        {
+            return Ok(new { status = "healthy", timestamp = DateTime.UtcNow });
+        }
     }
 }

@@ -147,6 +147,7 @@ namespace CashRegister.UnitTests
             // Assert
             Assert.Empty(actualResults); // No change should be calculated
         }
+        
         private bool VerifyChangeAmount(string changeDescription, decimal expectedAmount)
         {
             if (string.IsNullOrEmpty(changeDescription))

@@ -1,7 +1,6 @@
 using CashRegister.Server.Services;
 using CashRegister.Server.Middleware;
 using Microsoft.Extensions.Options;
-using Serilog.AspNetCore;
 using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
