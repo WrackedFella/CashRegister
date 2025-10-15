@@ -94,7 +94,7 @@ function CashRegisterWidget() {
           <h1 className="text-center mb-4">Cash Register</h1>
           <hr />
           <h5 className="text-center mb-4">
-            Upload a file with transaction totals (separated by lines) and press Submit to see the results.
+            Upload a transaction file and press Submit to see the results.<br/>
           </h5>
           <hr />
           <Form>
