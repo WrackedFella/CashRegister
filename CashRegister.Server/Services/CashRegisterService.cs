@@ -64,9 +64,9 @@ namespace CashRegister.Server.Services
                 return string.Empty;
             }
 
-            // Convert to cents to check divisibility by 3 (avoids floating point issues)
+            // Convert to cents to check divisibility by random divisor (avoids floating point issues)
             var amountOwedInCents = (int)Math.Round(amountOwed * 100);
-            var changeDescription = amountOwedInCents % 3 == 0 
+            var changeDescription = amountOwedInCents % _configuration.RandomDivisor == 0 
                 ? CalculateRandomChange(changeAmount) 
                 : CalculateStandardChange(changeAmount);
 

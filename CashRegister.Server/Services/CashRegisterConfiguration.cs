@@ -5,6 +5,7 @@ namespace CashRegister.Server.Services
         public required Dictionary<string, decimal> CurrencyDenominations { get; set; }
         public required string CurrencySymbol { get; set; }
         public required RandomChangeProbabilities RandomProbabilities { get; set; }
+        public int RandomDivisor { get; set; } = 3;
     }
 
     public class RandomChangeProbabilities
